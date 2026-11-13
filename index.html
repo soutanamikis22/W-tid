@@ -1715,7 +1715,16 @@
 		}
 
 		function isExtraTrain(o) {
-			if (isHapiLine()) return false;
+			if (isHapiLine())
+			{
+				// ハピライン: 「配」から始まる列番、または列番の千の位が8・9のものを臨時列車とみなす
+				var hn = String((o && o.operation_number) || "");
+				if (/^配/.test(hn)) return true;
+				var hnum = parseInt(hn, 10);
+				if (isNaN(hnum)) return false;
+				var th = Math.floor(hnum / 1000) % 10;
+				return th === 8 || th === 9;
+			}
 			if (!o || o.operation_number == null || o.operation_number === "") return false;
 			var num = parseInt(o.operation_number, 10);
 			if (isNaN(num)) return false;
