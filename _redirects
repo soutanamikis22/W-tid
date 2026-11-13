@@ -1,0 +1,5 @@
+/elesite-api/*  https://www.elesite-next.com/fastapi/:splat  200
+/elesite-img/*  https://img.elesite-next.com/:splat  200
+/elesite-site/*  https://www.elesite-next.com/:splat  200
+
+/hapi-api/*  /.netlify/functions/hapi/:splat  200
