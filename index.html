@@ -1040,6 +1040,141 @@
 						plats: [-1, 1],
 					},
 				],
+			},
+			"hoku":
+			{
+				uri: "hoku",
+				line_id: 27002,
+				line_name: "北越急行ほくほく線",
+				full_name: "北越急行ほくほく線",
+				color: "#F28C28",
+				hoku: true,
+				sections:
+				[
+					{
+						station_id: 1,
+						station_name: "直江津",
+						tracks: "M-6,-1H6M-6,1H6",
+						plats: [-1, 1],
+					},
+					{
+						section_id: ["S1"],
+					},
+					{
+						station_id: 2,
+						station_name: "犀潟",
+						tracks: "M-6,-1H6M-6,1H6",
+						plats: [-1, 1],
+					},
+					{
+						section_id: ["S2"],
+					},
+					{
+						station_id: 3,
+						station_name: "くびき",
+						tracks: "M-6,-1H6M-6,1H6",
+						plats: [-1, 1],
+					},
+					{
+						section_id: ["S3"],
+					},
+					{
+						station_id: 4,
+						station_name: "大池いこいの森",
+						tracks: "M-6,-1H6M-6,1H6",
+						plats: [-1, 1],
+					},
+					{
+						section_id: ["S4"],
+					},
+					{
+						station_id: 5,
+						station_name: "うらがわら",
+						tracks: "M-6,-1H6M-6,1H6",
+						plats: [-1, 1],
+					},
+					{
+						section_id: ["S5"],
+					},
+					{
+						station_id: 6,
+						station_name: "虫川大杉",
+						tracks: "M-6,-1H6M-6,1H6",
+						plats: [-1, 1],
+					},
+					{
+						section_id: ["S6"],
+					},
+					{
+						station_id: 7,
+						station_name: "ほくほく大島",
+						tracks: "M-6,-1H6M-6,1H6",
+						plats: [-1, 1],
+					},
+					{
+						section_id: ["S7"],
+					},
+					{
+						station_id: 8,
+						station_name: "まつだい",
+						tracks: "M-6,-1H6M-6,1H6",
+						plats: [-1, 1],
+					},
+					{
+						section_id: ["S8"],
+					},
+					{
+						station_id: 9,
+						station_name: "十日町",
+						tracks: "M-6,-1H6M-6,1H6",
+						plats: [-1, 1],
+					},
+					{
+						section_id: ["S9"],
+					},
+					{
+						station_id: 10,
+						station_name: "しんざ",
+						tracks: "M-6,-1H6M-6,1H6",
+						plats: [-1, 1],
+					},
+					{
+						section_id: ["S10"],
+					},
+					{
+						station_id: 11,
+						station_name: "美佐島",
+						tracks: "M-6,-1H6M-6,1H6",
+						plats: [-1, 1],
+					},
+					{
+						section_id: ["S11"],
+					},
+					{
+						station_id: 12,
+						station_name: "魚沼丘陵",
+						tracks: "M-6,-1H6M-6,1H6",
+						plats: [-1, 1],
+					},
+					{
+						section_id: ["S12"],
+					},
+					{
+						station_id: 13,
+						station_name: "六日町",
+						tracks: "M-6,-1H6M-6,1H6",
+						plats: [-1, 1],
+					},
+					{
+						section_id: ["S13"],
+					},
+					{
+						station_id: 14,
+						station_name: "越後湯沢",
+						tracks: "M-6,-1H6M-6,1H6",
+						plats: [-1, 1],
+					},
+				],
 			}
 		};
 
@@ -1212,6 +1347,66 @@
 				(e.tr || []).forEach(function (t) { add(t, m[1] == "U", { section_id: m[1] + m[2], hapi_kind: "K", hapi_st: parseInt(m[2], 10) }); });
 			});
 			return { trains: out };
+		}
+
+
+		// ===== 北越急行ほくほく線 =====
+		// Worker(/hokuhoku/unkou.json)が運行案内ページの表をJSON化して返す: {date, exp, trains:[{kind,dest,no,late,place}]}
+		var WORKER_BASE = HAPI_PROXY.replace(/\/sp\/data\/[^\/]*$/, "");
+		var HOKU_ST = ["直江津","犀潟","くびき","大池いこいの森","うらがわら","虫川大杉","ほくほく大島","まつだい","十日町","しんざ","美佐島","魚沼丘陵","六日町","越後湯沢"];
+		var destination_name_hoku = {};
+		HOKU_ST.forEach(function (n, i) { destination_name_hoku[i + 1] = n; });
+		var hokuInfo = null;
+
+		function isHokuLine() { return !!(linedata[curline] && linedata[curline].hoku); }
+		function hokuNorm(x) { return String(x || "").replace(/[\s\u3000]+/g, ""); }
+		function hokuIdx(x) { return HOKU_ST.indexOf(hokuNorm(x)) + 1; }
+		function hokuDestCode(x)
+		{
+			var n = hokuNorm(x); if (!n) return 0;
+			var i = hokuIdx(n); if (i) return i;
+			for (var k in destination_name_hoku) if (destination_name_hoku[k] == n) return parseInt(k, 10);
+			var c = 101; while (destination_name_hoku[c]) c++;
+			destination_name_hoku[c] = n;
+			return c;
+		}
+
+		function hokuConvert(j)
+		{
+			hokuInfo = j || {};
+			var out = [], lid = linedata[curline].line_id;
+			((j && j.trains) || []).forEach(function (t)
+			{
+				var no = hokuNorm(t.no), kt = String(t.kind || "");
+				var kind = /回送|臨時/.test(kt) ? "回" : (/超快速/.test(kt) ? "超快" : (/快速/.test(kt) ? "快速" : ""));
+				if (/^回/.test(no)) { no = no.replace(/^回/, ""); kind = "回"; }
+				var parts = hokuNorm(t.place).split(/[～〜~]/);
+				var a = hokuIdx(parts[0]), b = parts.length > 1 ? hokuIdx(parts[1]) : 0;
+				var o = { line_id: lid, operation_number: no, kind: kind, delay_time: parseInt(String(t.late || "").replace(/[^0-9]/g, ""), 10) || 0 };
+				var dc = hokuDestCode(t.dest);
+				if (dc) o.destination_station_code = dc;
+				var lo, hi;
+				if (a && b && Math.abs(a - b) == 1) { lo = Math.min(a, b); hi = Math.max(a, b); o.section_id = "S" + lo; }
+				else if (a && parts.length == 1) { lo = hi = a; o.station_id = a; }
+				else return;
+				// 上り=直江津方面(図の上側)。行先の位置で判定し、判定できなければ列番の偶奇(偶数=上り)
+				var di = hokuIdx(t.dest);
+				if (di && di < lo) o.up = true;
+				else if (di && di > hi) o.up = false;
+				else if (di && lo != hi) o.up = (di == lo);
+				else { var nn = parseInt(no, 10); o.up = isNaN(nn) ? false : (nn % 2 == 0); }
+				out.push(o);
+			});
+			return { trains: out };
+		}
+
+		function hokuRenderUnten()
+		{
+			var el = document.getElementById("unten-text");
+			if (!el) return;
+			var t = "北越急行 運行案内" + (hokuInfo && hokuInfo.date ? " (" + hokuInfo.date + ")" : "");
+			if (hokuInfo && hokuInfo.exp) t += " " + hokuInfo.exp;
+			el.textContent = t;
 		}
 
 		// ===== ハピライン: 列車ダイヤ(到着/発車時刻) =====
@@ -1459,7 +1654,7 @@
 		}
 
 		// 診断用: えれサイトAPIの一覧を取得して表示(?路線&debug のときだけ)
-		if (DBG && /^https?:/.test(location.protocol) && !/^\?hapi/.test(location.search))
+		if (DBG && /^https?:/.test(location.protocol) && !/^\?(hapi|hoku)/.test(location.search))
 		{
 			window.addEventListener("load", function ()
 			{
@@ -1715,9 +1910,9 @@
 		}
 
 		function isExtraTrain(o) {
-			if (isHapiLine())
+			if (isHapiLine() || isHokuLine())
 			{
-				// ハピライン: 「配」から始まる列番、または列番の千の位が8・9のものを臨時列車とみなす
+				// ハピライン/ほくほく: 「配」から始まる列番、または列番の千の位が8・9のものを臨時列車とみなす
 				var hn = String((o && o.operation_number) || "");
 				if (/^配/.test(hn)) return true;
 				var hnum = parseInt(hn, 10);
@@ -1828,6 +2023,7 @@
 		function fetchDelayInfo() {
 			var delayText = document.getElementById("unten-text");
 			if (!delayText) return;
+			if (isHokuLine()) { hokuRenderUnten(); return; }
 			if (isHapiLine())
 			{
 				var getU = function (u) { return fetch(u + "?" + Date.now()).then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); }); };
@@ -1873,13 +2069,14 @@
 			if (!linedata[curline]) return;
 
 			request = new XMLHttpRequest();
-			var hapi = isHapiLine();
-			var reqUrl = hapi ? ((hapiUseDirect ? HAPI_URL : HAPI_PROXY) + "?" + Date.now()) : "https://w-tid.jp/tokyu/" + linedata[curline].uri + ".json";
+			var hapi = isHapiLine(), hoku = isHokuLine();
+			var reqUrl = hoku ? (WORKER_BASE + "/hokuhoku/unkou.json?" + Date.now()) : hapi ? ((hapiUseDirect ? HAPI_URL : HAPI_PROXY) + "?" + Date.now()) : "https://w-tid.jp/tokyu/" + linedata[curline].uri + ".json";
 			request.open("GET", reqUrl, true);
 			request.onreadystatechange = function ()
 			{
 				if (request.readyState != 4) return;
 				if (request.status != 200) {
+					if (hoku) dbg("hoku", "ほくほく取得失敗: HTTP " + request.status + " " + reqUrl);
 					if (hapi) dbg("hapi" + (hapiUseDirect ? "-直接" : "-プロキシ"), "ハピライン取得失敗: HTTP " + request.status + " " + reqUrl + (hapiUseDirect ? "" : "\n→ 直接取得に切替(CORS等で失敗する場合あり)"));
 					request = null;
 					if (hapi && !hapiUseDirect) { hapiUseDirect = true; update(); }
@@ -1890,11 +2087,13 @@
 				try {
 					res = JSON.parse(request.responseText);
 				} catch(e) {
+					if (hoku) dbg("hoku", "ほくほく: JSONとして読めません " + reqUrl);
 					if (hapi) dbg("hapi" + (hapiUseDirect ? "-直接" : "-プロキシ"), "ハピライン: JSONとして読めません " + reqUrl + "\n先頭: " + String(request.responseText).slice(0, 80));
 					request = null;
 					if (hapi && !hapiUseDirect) { hapiUseDirect = true; update(); }
 					return;
 				}
+				if (hoku) { res = hokuConvert(res); hokuRenderUnten(); }
 				if (hapi)
 				{
 					dbg("hapi", "ハピライン取得: " + reqUrl + "\nキー: " + Object.keys(res || {}).join(",") + (res && (res.TS || res.EK) ? "" : "\n⚠ TS/EK が無い＝列車位置のJSONではありません(HAPI_URL を確認)"));
@@ -1931,7 +2130,7 @@
 							var destHtml = "";
 							if ("destination_station_code" in o)
 							{
-								var dmap = isHapiLine() ? destination_name_hapi : ((linedata[curline].line_id == 26001 || linedata[curline].line_id == 26002 || linedata[curline].line_id == 26009) ? destination_name_tymg : destination_name_dtom);
+								var dmap = isHapiLine() ? destination_name_hapi : isHokuLine() ? destination_name_hoku : ((linedata[curline].line_id == 26001 || linedata[curline].line_id == 26002 || linedata[curline].line_id == 26009) ? destination_name_tymg : destination_name_dtom);
 								var dc = o.destination_station_code;
 								destHtml = dc in dmap ? dmap[dc] : String(dc);
 							}
@@ -1964,7 +2163,7 @@
 							if (metaTxt.trim() != "") { var mt = document.createElement("span"); mt.className = elesiteSharyo ? "mt" : "fm"; mt.innerHTML = metaTxt; tra.appendChild(mt); }
 							if (o.delay_time > 0) { var dl = document.createElement("span"); dl.className = "dl"; dl.textContent = "+" + o.delay_time; tra.appendChild(dl); }
 
-							if (opTxt != "")
+							if (opTxt != "" && !isHokuLine())
 							{
 								var a = document.createElement("a");
 								a.className = "ov";
@@ -2074,7 +2273,7 @@
 			if (!container) return;
 			container.innerHTML = "";
 
-			var CODE = { toyoko: "TY", meguro: "MG", dento: "DT", oimachi: "OM", shinyokohama: "SH", minatomirai: "MM", hapi: "HP" };
+			var CODE = { toyoko: "TY", meguro: "MG", dento: "DT", oimachi: "OM", shinyokohama: "SH", minatomirai: "MM", hapi: "HP", hoku: "HK" };
 
 			Object.keys(linedata).forEach(function (key)
 			{
