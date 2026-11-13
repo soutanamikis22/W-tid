@@ -1163,9 +1163,9 @@
 
 		// 列車位置JSON / 運行情報JSON (同一オリジンのプロキシ→直接の順に試行)
 		const HAPI_URL = "https://trainlocation.hapi-line.co.jp/sp/data/traffic_info.json";
-		const HAPI_PROXY = "https://hapi-proxy.soutanamiki-s22.workers.dev/sp/data/traffic_info.json";
+		const HAPI_PROXY = "/hapi-api/sp/data/traffic_info.json";
 		const HAPI_UNKOU_URL = "https://trainlocation.hapi-line.co.jp/sp/data/unkou.json";
-		const HAPI_UNKOU_PROXY = "https://hapi-proxy.soutanamiki-s22.workers.dev/sp/data/unkou.json";
+		const HAPI_UNKOU_PROXY = "/hapi-api/sp/data/unkou.json";
 		// 在線情報(公式)のページ。各列車カードのリンク先
 		const HAPI_ZAISEN_PAGE = "https://trainlocation.hapi-line.co.jp/sp/";
 		var hapiUseDirect = false, hapiUnkou = null, hapiDelayCount = 0;
@@ -1230,7 +1230,7 @@
 			get(HAPI_DIA_PROXY).catch(function () { return get(HAPI_DIA_URL); })
 				.then(function (j) { hapiDia[no] = { t: Date.now(), d: (j && Array.isArray(j.dy)) ? j.dy : [] }; })
 				.catch(function () { hapiDia[no] = { t: Date.now(), d: null, fail: true }; })
-				.then(function () { hapiFillTimes(); });
+				.then(function () { hapiFillTimes(); hapiRenderDrawer(); });
 		}
 
 		function hapiTimeText(d, kind, st)
@@ -1240,6 +1240,83 @@
 			if (!r) return "";
 			if (kind == "K") return r.tt ? r.tt + "着" : (r.ht ? r.ht + "発" : "");
 			return r.ht ? r.ht + "発" : (r.tt ? r.tt + "着" : "");
+		}
+
+
+		// ===== ハピライン: 列車タップで停車駅と時刻の一覧 =====
+		var hapiDrawerO = null;
+
+		function hapiOpenDrawer(o)
+		{
+			hapiDrawerO = o;
+			hapiLoadDia(o.hapi_no);
+			hapiRenderDrawer();
+			document.getElementById("train-drawer-backdrop").classList.add("open");
+			document.getElementById("train-drawer").classList.add("open");
+		}
+
+		function closeTrainDrawer()
+		{
+			hapiDrawerO = null;
+			document.getElementById("train-drawer-backdrop").classList.remove("open");
+			document.getElementById("train-drawer").classList.remove("open");
+		}
+
+		// 更新のたびに、開いている列車の現在位置を最新にする
+		function hapiRefreshDrawer(trains)
+		{
+			if (!hapiDrawerO) return;
+			var f = null;
+			for (var i = 0; i < trains.length; i++) if (trains[i].hapi_no == hapiDrawerO.hapi_no) { f = trains[i]; break; }
+			if (f) hapiDrawerO = f;
+			hapiRenderDrawer();
+		}
+
+		function hapiRenderDrawer()
+		{
+			var o = hapiDrawerO;
+			var box = document.getElementById("train-drawer-content");
+			var ttl = document.getElementById("train-drawer-title");
+			if (!o || !box || !ttl) return;
+			var dest = (o.destination_station_code in destination_name_hapi) ? destination_name_hapi[o.destination_station_code] + "行" : "";
+			ttl.textContent = [o.operation_number, (o.kind || "") + " " + dest, o.delay_time > 0 ? "+" + o.delay_time + "分" : ""].join("  ").replace(/\s+$/, "");
+			while (box.lastChild) box.removeChild(box.lastChild);
+			var msg = function (t) { var d = document.createElement("div"); d.className = "tdia-msg"; d.textContent = t; box.appendChild(d); };
+			var e = hapiDia[o.hapi_no];
+			if (!e || e.loading) msg("読み込み中…");
+			else if (!e.d || e.d.length == 0) msg(e.fail ? "ダイヤを取得できませんでした。" : "この列車のダイヤはありません。");
+			else
+			{
+				var head = document.createElement("div");
+				head.className = "tdia-row tdia-head";
+				head.innerHTML = "<span>駅</span><span>着</span><span>発</span>";
+				box.appendChild(head);
+				e.d.forEach(function (r)
+				{
+					var st = parseInt(r.st, 10);
+					var row = document.createElement("div");
+					row.className = "tdia-row" + (st == o.hapi_st ? " tdia-cur" : "");
+					var n = document.createElement("span");
+					n.className = "tdia-name";
+					n.textContent = (st in destination_name_hapi) ? destination_name_hapi[st] : String(r.st);
+					if (st == o.hapi_st)
+					{
+						var tag = document.createElement("em");
+						tag.textContent = o.hapi_kind == "S" ? "停車中" : "次";
+						n.appendChild(tag);
+					}
+					if (r.pa && r.pa != "0") { var pa = document.createElement("small"); pa.textContent = r.pa + "番線"; n.appendChild(pa); }
+					var a = document.createElement("span"); a.textContent = r.tt || "";
+					var h = document.createElement("span"); h.textContent = r.ht || "";
+					row.appendChild(n); row.appendChild(a); row.appendChild(h);
+					box.appendChild(row);
+				});
+			}
+			var lk = document.createElement("a");
+			lk.className = "tdia-link";
+			lk.href = HAPI_ZAISEN_PAGE; lk.target = "_blank"; lk.rel = "noopener";
+			lk.textContent = "ハピラインNAVI(公式の在線情報)";
+			box.appendChild(lk);
 		}
 
 		// 駅間=向かう駅の到着時刻 / 駅にいる列車=その駅の発車時刻 を既存の .mt 表示で追加
@@ -1812,7 +1889,7 @@
 				if (hapi)
 				{
 					dbg("hapi", "ハピライン取得: " + reqUrl + "\nキー: " + Object.keys(res || {}).join(",") + (res && (res.TS || res.EK) ? "" : "\n⚠ TS/EK が無い＝列車位置のJSONではありません(HAPI_URL を確認)"));
-					res = hapiConvert(res); hapiRenderUnten();
+					res = hapiConvert(res); hapiRenderUnten(); hapiRefreshDrawer(res.trains);
 				}
 
 				var renderTrainsInner = function() {
@@ -1882,7 +1959,7 @@
 							{
 								var a = document.createElement("a");
 								a.className = "ov";
-								if (linedata[curline].hapi) { a.href = HAPI_ZAISEN_PAGE; a.target = "_blank"; a.rel = "noopener"; } else
+								if (linedata[curline].hapi) { a.href = "#"; a.onclick = function (ev) { ev.preventDefault(); hapiOpenDrawer(o); }; } else
 								a.href = "https://tokyu-tid.s3.amazonaws.com/train_schedules?lineId=" + o.line_id + "&operationNumber=" + o.operation_number + "&direction=" + (o.up == true ? "up" : "down");
 								tra.appendChild(a);
 							}
@@ -2554,6 +2631,15 @@
 		.drawer-header { display: flex; align-items: baseline; justify-content: space-between; padding: 16px 18px 10px; flex-shrink: 0; }
 		.drawer-title { font-size: 13px; font-weight: 700; color: #777; letter-spacing: .08em; }
 		.drawer-close-btn { background: none; border: 0; font: inherit; font-size: 14px; color: #1a5fb4; padding: 4px 0; cursor: pointer; }
+		.tdia-msg { padding: 24px 18px; text-align: center; color: #777; font-size: 14px; }
+		.tdia-row { display: grid; grid-template-columns: 1fr 56px 56px; align-items: center; padding: 9px 18px; border-top: 1px solid #eee; font-size: 15px; font-variant-numeric: tabular-nums; }
+		.tdia-row > span:nth-child(n+2) { text-align: right; }
+		.tdia-head { border-top: 0; font-size: 11px; color: #999; padding-top: 0; padding-bottom: 4px; }
+		.tdia-name { font-weight: 700; color: #44403c; }
+		.tdia-name small { margin-left: 6px; font-weight: 400; font-size: 10px; color: #a8a29e; }
+		.tdia-name em { margin-left: 6px; font-style: normal; font-size: 10px; font-weight: 700; color: #fff; background: #E95A9B; border-radius: 2px; padding: 0 4px; }
+		.tdia-cur { background: #fdf0f6; }
+		.tdia-link { display: block; padding: 14px 18px 4px; font-size: 13px; color: #1a5fb4; text-decoration: none; border-top: 1px solid #eee; }
 		.drawer-content { overflow-y: auto; padding: 0 0 calc(12px + env(safe-area-inset-bottom)); -webkit-overflow-scrolling: touch; }
 		.route-card { display: flex; align-items: center; gap: 14px; padding: 11px 18px; border-top: 1px solid #e4e4e4; cursor: pointer; }
 		.route-card:active { background: #f2f2f2; }
@@ -2628,6 +2714,15 @@
 	</footer>
 
 	<!-- 路線選択 ドロワー / ボトムシート -->
+	<div id="train-drawer-backdrop" class="drawer-backdrop" onclick="closeTrainDrawer()"></div>
+	<div id="train-drawer" class="route-drawer">
+		<div class="drawer-header">
+			<span class="drawer-title" id="train-drawer-title"></span>
+			<button class="drawer-close-btn" onclick="closeTrainDrawer()">閉じる</button>
+		</div>
+		<div class="drawer-content" id="train-drawer-content"></div>
+	</div>
+
 	<div id="route-drawer-backdrop" class="drawer-backdrop" onclick="closeRouteDrawer()"></div>
 	<div id="route-drawer" class="route-drawer">
 		<div class="drawer-header">
