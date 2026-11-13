@@ -1172,9 +1172,10 @@
 
 		// 列車位置JSON / 運行情報JSON (同一オリジンのプロキシ→直接の順に試行)
 		const HAPI_URL = "https://trainlocation.hapi-line.co.jp/sp/data/traffic_info.json";
-		const HAPI_PROXY = "/hapi-api/sp/data/traffic_info.json";
+		const HAPI_PROXY = "https://hapi-proxy.soutanamiki-s22.workers.dev/sp/data/traffic_info.json";
 		const HAPI_UNKOU_URL = "https://trainlocation.hapi-line.co.jp/sp/data/unkou.json";
-		const HAPI_UNKOU_PROXY = "/hapi-api/sp/data/unkou.json";
+        const HAPI_UNKOU_PROXY = "https://hapi-proxy.soutanamiki-s22.workers.dev/sp/data/unkou.json";
+
 		// 在線情報(公式)のページ。各列車カードのリンク先
 		const HAPI_ZAISEN_PAGE = "https://trainlocation.hapi-line.co.jp/sp/";
 		var hapiUseDirect = false, hapiUnkou = null, hapiDelayCount = 0;
