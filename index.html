@@ -1371,6 +1371,21 @@
 		}
 		setInterval(tickStops, 1000);
 
+		// ===== 編成の行を「編成 ⇄ 8急42(両数・所属・運用番号)」に交互表示 =====
+		function tickAlt()
+		{
+			var ph = Math.floor(Date.now() / 2500) % 2;
+			var els = document.querySelectorAll("#main .alt");
+			for (var i = 0; i < els.length; i++)
+			{
+				var b = els[i].getAttribute("data-b");
+				if (!b || els[i].getAttribute("data-p") === String(ph)) continue;
+				els[i].innerHTML = ph ? b : els[i].getAttribute("data-a");
+				els[i].setAttribute("data-p", ph);
+			}
+		}
+		setInterval(tickAlt, 500);
+
 		// ===== 北越急行ほくほく線 =====
 		// Worker(/hokuhoku/unkou.json)が運行案内ページの表をJSON化して返す: {date, exp, trains:[{kind,dest,no,late,place}]}
 		var WORKER_BASE = HAPI_PROXY.replace(/\/sp\/data\/[^\/]*$/, "");
@@ -2171,6 +2186,7 @@
 							if ("num_of_cars" in o && o.num_of_cars != "" && o.num_of_cars != "99") origText += o.num_of_cars;
 							if ("affiliation" in o && o.affiliation != "") origText += o.affiliation == null ? "？" : o.affiliation;
 							var origTrainNum = ("train_orchestration_number" in o && o.train_orchestration_number != "") ? o.train_orchestration_number : "";
+							var metaTxt0 = origText + origTrainNum;
 
 							var cachedElesite = (elesiteParams && hasOp) ? getElesiteCachedInfo(elesiteKey(elesiteParams), o.operation_number) : null;
 							var elesiteSharyo = cachedElesite && cachedElesite.sharyo_list ? cachedElesite.sharyo_list : null;
@@ -2180,9 +2196,9 @@
 							var iconInfo = { formation: elesiteSharyo ? plain(elesiteSharyo).trim() : guessedFm, affiliation: (o.affiliation || ""), cars: parseInt(o.num_of_cars, 10), line: tlid, match: match };
 							if (DBG) dbg("t" + opTxt, "列車 " + opTxt + " えれ情報:" + (cachedElesite ? "あり 形式='" + iconInfo.formation + "'" : "なし") + " 推定:" + (guessedFm || "-") + " 候補:" + elesiteIconUrls(iconInfo).length);
 							setTrainIcon(ic, iconInfo);
-							if (elesiteSharyo) { var fm = document.createElement("span"); fm.className = "fm"; fm.innerHTML = elesiteSharyo; tra.appendChild(fm); }
+							if (elesiteSharyo) { var fm = document.createElement("span"); fm.className = "fm alt"; fm.innerHTML = elesiteSharyo; fm.setAttribute("data-a", elesiteSharyo); fm.setAttribute("data-b", metaTxt0.trim()); tra.appendChild(fm); }
 							var metaTxt = origText + origTrainNum;
-							if (metaTxt.trim() != "") { var mt = document.createElement("span"); mt.className = elesiteSharyo ? "mt" : "fm"; mt.innerHTML = metaTxt; tra.appendChild(mt); }
+							if (metaTxt.trim() != "" && !elesiteSharyo) { var mt = document.createElement("span"); mt.className = "fm"; mt.innerHTML = metaTxt; tra.appendChild(mt); }
 							if (o.delay_time > 0) { var dl = document.createElement("span"); dl.className = "dl"; dl.textContent = "+" + o.delay_time; tra.appendChild(dl); }
 							if (o.stop_time > 0) { var stp = document.createElement("span"); stp.className = "mt stp"; stp.setAttribute("data-s0", o.stop_time); stp.setAttribute("data-t0", recvAt); stp.textContent = fmtStop(o.stop_time); tra.appendChild(stp); }
 
