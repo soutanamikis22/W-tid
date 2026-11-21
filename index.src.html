@@ -1839,6 +1839,9 @@
 		const elesiteDataCache = {};
 		var lastElesiteFetchTimes = {};
 		const ELESITE_FETCH_COOLDOWN = 60000;
+		// えれサイトに情報がなかった列車(運用番号)は、この時間は再取得のきっかけにしない
+		var elesiteMiss = {};
+		const ELESITE_MISS_TTL = 600000;
 
 		// 同一オリジンのプロキシ(/elesite-api/)を先に試し、だめなら直接取得
 		function fetchElesite(query)
@@ -2254,6 +2257,8 @@
 						{
 							if (!getElesiteCachedInfo(elesiteKey(elesiteParams), tr.operation_number))
 							{
+								var mk = elesiteKey(elesiteParams) + ":" + tr.operation_number;
+								if (elesiteMiss[mk] && Date.now() - elesiteMiss[mk] < ELESITE_MISS_TTL) continue;
 								needElesiteFetch = true;
 								break;
 							}
@@ -2282,6 +2287,7 @@
 					getDayId(elesiteParams, yyyy + "-" + mo + "-" + dd).then(function (did) { return fetchElesite(elesiteQuery.replace("__DAYID__", did)); })
 						.then(data => {
 							try { if (data) setElesiteCacheFromData(elesiteKey(elesiteParams), data); } catch (e) { console.error(e); }
+							if (data && res && Array.isArray(res.trains)) res.trains.forEach(function (t2) { if (t2.line_id == linedata[curline].line_id && t2.operation_number != null && t2.operation_number !== "" && !getElesiteCachedInfo(elesiteKey(elesiteParams), t2.operation_number)) elesiteMiss[elesiteKey(elesiteParams) + ":" + t2.operation_number] = Date.now(); });
 							if (DBG && data) { var tp = Array.isArray(data.train_position) ? data.train_position : []; dbg("data", "えれ応答 train_position:" + tp.length + "件 キー:" + (tp[0] ? Object.keys(tp[0]).join(",") : "-") + "\n例: " + "(sharyo_list有り" + tp.filter(function (x) { return x.sharyo_list; }).length + " / shotei有り" + tp.filter(function (x) { return x.shotei; }).length + ")\n先頭5件: " + JSON.stringify(tp.slice(0, 5).map(function (x) { return { u: x.unban, shubetsu: x.shubetsu, shotei: x.shotei, n: x.combination_num, ic: (x.sharyo_icon_path_list || [])[0] }; })) + "\n情報あり例: " + JSON.stringify(tp.filter(function (x) { return x.sharyo_list || x.shotei; }).slice(0, 3).map(function (x) { return { u: x.unban, s: x.sharyo_list, shotei: x.shotei, ic: x.sharyo_icon_path_list }; }))); }
 							clearTimeout(timer); finish();
 						})
