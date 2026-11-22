@@ -2235,6 +2235,15 @@
 					var contentElem = document.getElementById("extra-trains-content");
 					if (contentElem) contentElem.innerHTML = (extraTrainsList.length > 0) ? extraTrainsList.join(", ") : "なし";
 
+					// 表示中の路線で一番遅れている列車
+					var mdElem = document.getElementById("max-delay-content");
+					if (mdElem)
+					{
+						var mdTrain = null;
+						(res.trains || []).forEach(function (t) { if (t.line_id == linedata[curline].line_id && t.delay_time > 0 && (!mdTrain || t.delay_time > mdTrain.delay_time)) mdTrain = t; });
+						mdElem.textContent = mdTrain ? mdTrain.delay_time + "分 (" + opno(mdTrain.operation_number, mdTrain.line_id) + ")" : "なし";
+					}
+
 					request = null;
 				};
 
@@ -2929,6 +2938,10 @@
 		<div class="extra-trains-pill" id="extra-trains-box">
 			<span class="title">臨時回送:</span>
 			<span id="extra-trains-content">なし</span>
+		</div>
+		<div class="extra-trains-pill" id="max-delay-box">
+			<span class="title">最大遅延:</span>
+			<span id="max-delay-content">なし</span>
 		</div>
 	</div>
 
