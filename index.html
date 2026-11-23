@@ -1388,7 +1388,22 @@
 
 		// ===== 現在地 → 最寄り駅を画面中央へ =====
 		// 駅の座標は持たず、押したときだけ OpenStreetMap(Overpass) で近くの駅を調べ、表示中の路線の駅名と照合する
-		var locBusy = false;
+		var locBusy = false, locToastTimer = null;
+		function locToast(msg, ms)
+		{
+			var t = document.getElementById("loc-toast");
+			if (!t)
+			{
+				t = document.createElement("div");
+				t.id = "loc-toast";
+				t.style.cssText = "position:fixed;left:50%;bottom:96px;transform:translateX(-50%);max-width:88%;z-index:9999;background:#1a1d23;color:#fff;font-size:13px;font-weight:700;padding:9px 14px;border-radius:10px;text-align:center;box-shadow:0 2px 10px rgba(0,0,0,.3)";
+				document.body.appendChild(t);
+			}
+			t.textContent = msg;
+			t.style.display = "block";
+			clearTimeout(locToastTimer);
+			if (ms) locToastTimer = setTimeout(function () { t.style.display = "none"; }, ms);
+		}
 		function locNorm(x) { return String(x || "").replace(/[\s\u3000・･]/g, "").replace(/駅$/, ""); }
 		function locMatch(a, b)
 		{
@@ -1403,10 +1418,23 @@
 			var dx = (lon2 - lon1) * Math.cos(lat1 * Math.PI / 180), dy = lat2 - lat1;
 			return Math.sqrt(dx * dx + dy * dy) * 111320;
 		}
+		// 時間切れを付けた fetch(応答がないまま固まるのを防ぐ)
+		function locFetchJson(url, ms)
+		{
+			return new Promise(function (resolve, reject)
+			{
+				var done = false, ac = (typeof AbortController !== "undefined") ? new AbortController() : null;
+				var tm = setTimeout(function () { if (!done) { done = true; if (ac) ac.abort(); reject(new Error("時間切れ")); } }, ms);
+				fetch(url, ac ? { signal: ac.signal } : undefined)
+					.then(function (x) { if (!x.ok) throw new Error("HTTP " + x.status); return x.json(); })
+					.then(function (j) { if (!done) { done = true; clearTimeout(tm); resolve(j); } })
+					.catch(function (e) { if (!done) { done = true; clearTimeout(tm); reject(e); } });
+			});
+		}
 		function locOverpass(lat, lon, r)
 		{
 			var q = '[out:json][timeout:12];node(around:' + r + ',' + lat + ',' + lon + ')["railway"~"^(station|halt)$"]["name"];out body;';
-			var get = function (base) { return fetch(base + "?data=" + encodeURIComponent(q)).then(function (x) { if (!x.ok) throw new Error("HTTP " + x.status); return x.json(); }); };
+			var get = function (base) { return locFetchJson(base + "?data=" + encodeURIComponent(q), 12000); };
 			return get("https://overpass-api.de/api/interpreter").catch(function () { return get("https://overpass.kumi.systems/api/interpreter"); })
 				.then(function (j) { return (j && j.elements) || []; });
 		}
@@ -1441,23 +1469,29 @@
 		}
 		function locateNearest()
 		{
-			if (locBusy) return;
-			if (!navigator.geolocation) { alert("この端末は位置情報に対応していません。"); return; }
+			if (locBusy) { locToast("検索中です…", 1500); return; }
+			if (!navigator.geolocation) { locToast("この端末は位置情報に対応していません。", 4000); return; }
 			var stations = [];
 			linedata[curline].sections.forEach(function (o) { if (o.station_id != null && o.station_name) stations.push(o); });
 			locBusy = true;
+			locToast("現在地を取得中…（許可を求められたら「許可」）", 0);
 			navigator.geolocation.getCurrentPosition(function (p)
 			{
 				var lat = p.coords.latitude, lon = p.coords.longitude;
+				locToast("最寄り駅を検索中…", 0);
 				locOverpass(lat, lon, 4000)
 					.then(function (els) { var b = locFind(lat, lon, stations, els); return b ? b : locOverpass(lat, lon, 20000).then(function (e2) { return locFind(lat, lon, stations, e2); }); })
-					.then(function (b) { if (!b || !locShow(b)) alert("この路線の駅が現在地の近くに見つかりませんでした。"); })
-					.catch(function () { alert("最寄り駅を調べられませんでした。電波の良い場所でもう一度お試しください。"); })
+					.then(function (b)
+					{
+						if (b && locShow(b)) locToast("最寄り: " + b.st.station_name + "（約" + (b.d >= 1000 ? (b.d / 1000).toFixed(1) + "km" : Math.round(b.d / 10) * 10 + "m") + "）", 4000);
+						else locToast("この路線の駅が現在地の近くに見つかりませんでした。", 4000);
+					})
+					.catch(function (e) { dbg("loc", "最寄り駅検索失敗: " + e); locToast("最寄り駅を調べられませんでした（" + (e && e.message ? e.message : e) + "）。もう一度お試しください。", 5000); })
 					.then(function () { locBusy = false; });
 			}, function (err)
 			{
 				locBusy = false;
-				alert(err && err.code == 1 ? "位置情報の利用が許可されていません。ブラウザの設定で許可してください。" : "現在地を取得できませんでした。");
+				locToast(err && err.code == 1 ? "位置情報が許可されていません。ブラウザ・端末の設定で許可してください。" : err && err.code == 3 ? "現在地の取得に時間がかかっています。電波の良い所でもう一度お試しください。" : "現在地を取得できませんでした。", 5000);
 			}, { enableHighAccuracy: false, timeout: 15000, maximumAge: 60000 });
 		}
 
