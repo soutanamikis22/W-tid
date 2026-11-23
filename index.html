@@ -1386,6 +1386,81 @@
 		}
 		setInterval(function () { if (!document.hidden) tickAlt(); }, 1000);
 
+		// ===== 現在地 → 最寄り駅を画面中央へ =====
+		// 駅の座標は持たず、押したときだけ OpenStreetMap(Overpass) で近くの駅を調べ、表示中の路線の駅名と照合する
+		var locBusy = false;
+		function locNorm(x) { return String(x || "").replace(/[\s\u3000・･]/g, "").replace(/駅$/, ""); }
+		function locMatch(a, b)
+		{
+			a = locNorm(a); b = locNorm(b);
+			if (!a || !b) return false;
+			if (a === b) return true;
+			var sh = a.length < b.length ? a : b, lg = a.length < b.length ? b : a;
+			return sh.length >= 4 && lg.indexOf(sh) === 0;
+		}
+		function locDist(lat1, lon1, lat2, lon2)
+		{
+			var dx = (lon2 - lon1) * Math.cos(lat1 * Math.PI / 180), dy = lat2 - lat1;
+			return Math.sqrt(dx * dx + dy * dy) * 111320;
+		}
+		function locOverpass(lat, lon, r)
+		{
+			var q = '[out:json][timeout:12];node(around:' + r + ',' + lat + ',' + lon + ')["railway"~"^(station|halt)$"]["name"];out body;';
+			var get = function (base) { return fetch(base + "?data=" + encodeURIComponent(q)).then(function (x) { if (!x.ok) throw new Error("HTTP " + x.status); return x.json(); }); };
+			return get("https://overpass-api.de/api/interpreter").catch(function () { return get("https://overpass.kumi.systems/api/interpreter"); })
+				.then(function (j) { return (j && j.elements) || []; });
+		}
+		function locFind(lat, lon, stations, els)
+		{
+			var best = null;
+			els.forEach(function (e)
+			{
+				var nm = e.tags && (e.tags.name || e.tags["name:ja"]);
+				for (var i = 0; i < stations.length; i++)
+				{
+					if (locMatch(nm, stations[i].station_name))
+					{
+						var d = locDist(lat, lon, e.lat, e.lon);
+						if (!best || d < best.d) best = { d: d, st: stations[i] };
+						break;
+					}
+				}
+			});
+			return best;
+		}
+		function locShow(best)
+		{
+			var el = document.getElementById("sta" + best.st.station_id);
+			if (!el) return false;
+			var row = (el.closest && el.closest(".row")) || el;
+			row.scrollIntoView({ block: "center", behavior: "smooth" });
+			row.style.outline = "3px solid #e53935";
+			row.style.outlineOffset = "-3px";
+			setTimeout(function () { row.style.outline = ""; row.style.outlineOffset = ""; }, 2500);
+			return true;
+		}
+		function locateNearest()
+		{
+			if (locBusy) return;
+			if (!navigator.geolocation) { alert("この端末は位置情報に対応していません。"); return; }
+			var stations = [];
+			linedata[curline].sections.forEach(function (o) { if (o.station_id != null && o.station_name) stations.push(o); });
+			locBusy = true;
+			navigator.geolocation.getCurrentPosition(function (p)
+			{
+				var lat = p.coords.latitude, lon = p.coords.longitude;
+				locOverpass(lat, lon, 4000)
+					.then(function (els) { var b = locFind(lat, lon, stations, els); return b ? b : locOverpass(lat, lon, 20000).then(function (e2) { return locFind(lat, lon, stations, e2); }); })
+					.then(function (b) { if (!b || !locShow(b)) alert("この路線の駅が現在地の近くに見つかりませんでした。"); })
+					.catch(function () { alert("最寄り駅を調べられませんでした。電波の良い場所でもう一度お試しください。"); })
+					.then(function () { locBusy = false; });
+			}, function (err)
+			{
+				locBusy = false;
+				alert(err && err.code == 1 ? "位置情報の利用が許可されていません。ブラウザの設定で許可してください。" : "現在地を取得できませんでした。");
+			}, { enableHighAccuracy: false, timeout: 15000, maximumAge: 60000 });
+		}
+
 		// ===== 北越急行ほくほく線 =====
 		// Worker(/hokuhoku/unkou.json)が運行案内ページの表をJSON化して返す: {date, exp, trains:[{kind,dest,no,late,place}]}
 		var WORKER_BASE = HAPI_PROXY.replace(/\/sp\/data\/[^\/]*$/, "");
@@ -2963,6 +3038,9 @@
 		</button>
 		<button onclick="update()" title="再取得">
 			<svg viewBox="0 0 24 24"><path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4z"></path></svg>
+		</button>
+		<button onclick="locateNearest()" title="現在地の最寄り駅へ">
+			<svg viewBox="0 0 24 24"><path d="M12 8c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4zm8.94 3c-.46-4.17-3.77-7.48-7.94-7.94V1h-2v2.06C6.83 3.52 3.52 6.83 3.06 11H1v2h2.06c.46 4.17 3.77 7.48 7.94 7.94V23h2v-2.06c4.17-.46 7.48-3.77 7.94-7.94H23v-2h-2.06zM12 19c-3.87 0-7-3.13-7-7s3.13-7 7-7 7 3.13 7 7-3.13 7-7 7z"></path></svg>
 		</button>
 	</div>
 
